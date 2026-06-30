@@ -657,14 +657,31 @@ export default function PartnerHome() {
             try {
               const booking = bookings.find(b => b.id === bookingId);
               if (booking && booking.isTask) {
-                await updateDoc(doc(db, 'serviceTasks', booking.taskId), {
-                  status: nextStatus,
-                  [`${nextStatus}At`]: new Date().toISOString()
-                });
+                const docId = booking.taskId || booking.id;
+                try {
+                  await updateDoc(doc(db, 'serviceTasks', docId), {
+                    status: nextStatus,
+                    [`${nextStatus}At`]: new Date().toISOString()
+                  });
+                } catch (err: any) {
+                  if (err.code === 'not-found') {
+                    // Fallback for older data structures
+                    await updateDoc(doc(db, 'bookings', docId), {
+                      status: nextStatus,
+                      [`${nextStatus}At`]: new Date().toISOString()
+                    });
+                  } else throw err;
+                }
               } else {
                 await updateDoc(doc(db, 'bookings', bookingId), {
                   status: nextStatus,
-                  [`${nextStatus}At`]: new Date().toISOString()
+                  [`${nextStatus}At`]: new Date().toISOString(),
+                  ...(nextStatus === 'accepted' ? {
+                    workerId: profile?.uid,
+                    workerName: profile?.firstName + ' ' + (profile?.lastName || ''),
+                    workerPhone: profile?.phone || '',
+                    workerImage: profile?.image || ''
+                  } : {})
                 });
               }
               
@@ -715,10 +732,22 @@ export default function PartnerHome() {
           [`${photoType}Image`]: imageUrl
         };
 
-        if (currentPhotoBooking.isTask) {
-          await updateDoc(doc(db, 'serviceTasks', currentPhotoBooking.taskId), updateData);
-        } else {
-          await updateDoc(doc(db, 'bookings', currentPhotoBooking.id), updateData);
+        try {
+          if (currentPhotoBooking.isTask) {
+            const docId = currentPhotoBooking.taskId || currentPhotoBooking.id;
+            try {
+              await updateDoc(doc(db, 'serviceTasks', docId), updateData);
+            } catch (err: any) {
+              if (err.code === 'not-found') {
+                await updateDoc(doc(db, 'bookings', docId), updateData);
+              } else throw err;
+            }
+          } else {
+            await updateDoc(doc(db, 'bookings', currentPhotoBooking.id), updateData);
+          }
+        } catch (updateError) {
+          console.error("Firestore update failed:", updateError);
+          throw updateError;
         }
         
         // Notify customer
