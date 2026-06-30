@@ -9,7 +9,13 @@
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "DirtFree Partner needs your location to show you nearby jobs and share your live location with customers while you're on duty.",
+        "NSLocationWhenInUseUsageDescription": "DirtFree Partner needs your location to find nearby service requests.",
+        "NSCameraUsageDescription": "DirtFree Partner needs camera access for job photo verification.",
+        "UIBackgroundModes": ["location", "fetch", "remote-notification"]
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -20,7 +26,22 @@
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
-      "package": "com.hyperbeep.dirtfreepartner"
+      "package": "com.hyperbeep.dirtfreepartner",
+      "permissions": [
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_BACKGROUND_LOCATION",
+        "FOREGROUND_SERVICE",
+        "FOREGROUND_SERVICE_LOCATION",
+        "CAMERA",
+        "VIBRATE",
+        "WAKE_LOCK",
+        "RECEIVE_BOOT_COMPLETED",
+        "SYSTEM_ALERT_WINDOW",
+        "READ_PHONE_STATE",
+        "CALL_PHONE",
+        "POST_NOTIFICATIONS"
+      ]
     },
     "web": {
       "output": "static",
@@ -41,6 +62,21 @@
         }
       ],
       "expo-font",
+      [
+        "expo-location",
+        {
+          "isAndroidBackgroundLocationEnabled": true,
+          "isAndroidForegroundServiceEnabled": true,
+          "locationAlwaysAndWhenInUsePermission": "DirtFree Partner needs your location to show nearby jobs and share live location with customers.",
+          "locationWhenInUsePermission": "DirtFree Partner needs your location to find nearby service requests."
+        }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "DirtFree Partner needs camera for job photo verification."
+        }
+      ],
       [
         "expo-build-properties",
         {
@@ -65,3 +101,4 @@
     }
   }
 }
+

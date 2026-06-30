@@ -43,6 +43,8 @@ import { socketService } from '../../lib/socket';
 // import * as Notifications from 'expo-notifications'; // Disabled for Expo Go compatibility
 import { addDoc, serverTimestamp } from 'firebase/firestore';
 import Animated, { useSharedValue, useAnimatedStyle, withRepeat, withTiming } from 'react-native-reanimated';
+import { startBackgroundLocationTracking, stopBackgroundLocationTracking, isTrackingActive } from '../../services/BackgroundLocationService';
+import { requestLocationPermissions, requestBatteryOptimizationExemption, requestAllPermissions } from '../../services/PermissionService';
 
 
 // Local notifications handler for foreground display
@@ -773,9 +775,10 @@ export default function PartnerHome() {
 
     const startLocationTracking = async () => {
       try {
-        let { status } = await Location.requestForegroundPermissionsAsync();
-        if (status !== 'granted') {
-          console.log('Location permission denied');
+        // Request foreground + background location permissions
+        const perms = await requestLocationPermissions();
+        if (!perms.foreground) {
+          console.log('Foreground location permission denied');
           return;
         }
 
@@ -797,27 +800,40 @@ export default function PartnerHome() {
           } catch (e) {
             console.warn("[LocationService] Error fetching initial coordinates:", e);
           }
+
+          // Start background location tracking with foreground service
+          if (perms.background) {
+            const started = await startBackgroundLocationTracking(profile.uid);
+            console.log('[LocationService] Background tracking started:', started);
+          } else {
+            console.log('[LocationService] Background permission not granted, using foreground-only tracking');
+          }
         }
 
-        // Keep watching for movements
+        // Also keep a foreground watcher for UI updates (map position etc.)
         locationSubscription = await Location.watchPositionAsync(
           {
             accuracy: Location.Accuracy.Balanced,
-            timeInterval: 15000, // Update every 15 seconds for testing/smoothness
-            distanceInterval: 10,  // Or every 10 meters
+            timeInterval: 15000,
+            distanceInterval: 10,
           },
           async (loc) => {
             if (isOnline && profile?.uid) {
               setPartnerCoords({ latitude: loc.coords.latitude, longitude: loc.coords.longitude });
-              await updateDoc(doc(db, 'partners', profile.uid), {
-                latitude: loc.coords.latitude,
-                longitude: loc.coords.longitude,
-                location: {
-                  lat: loc.coords.latitude,
-                  lng: loc.coords.longitude
-                },
-                lastLocationUpdate: new Date().toISOString()
-              });
+              // Firebase updates are handled by background service when available
+              // Only update from foreground if background is not active
+              const bgActive = await isTrackingActive();
+              if (!bgActive) {
+                await updateDoc(doc(db, 'partners', profile.uid), {
+                  latitude: loc.coords.latitude,
+                  longitude: loc.coords.longitude,
+                  location: {
+                    lat: loc.coords.latitude,
+                    lng: loc.coords.longitude
+                  },
+                  lastLocationUpdate: new Date().toISOString()
+                });
+              }
             }
           }
         );
@@ -828,6 +844,9 @@ export default function PartnerHome() {
 
     if (isOnline) {
       startLocationTracking();
+    } else {
+      // Stop background tracking when going offline
+      stopBackgroundLocationTracking();
     }
 
     return () => {
@@ -851,7 +870,28 @@ export default function PartnerHome() {
 
     setUpdatingOnline(true);
     const newStatus = !isOnline;
+
     try {
+      // Request all permissions when going online for the first time
+      if (newStatus) {
+        const perms = await requestAllPermissions();
+        if (!perms.foregroundLocation) {
+          Alert.alert('Permission Required', 'Location permission is required to go online.');
+          setUpdatingOnline(false);
+          return;
+        }
+
+        // Request battery optimization exemption (one-time prompt)
+        const hasAskedBattery = await AsyncStorage.getItem('asked_battery_optimization');
+        if (!hasAskedBattery && Platform.OS === 'android') {
+          await requestBatteryOptimizationExemption();
+          await AsyncStorage.setItem('asked_battery_optimization', 'true');
+        }
+      } else {
+        // Going offline — stop background tracking
+        await stopBackgroundLocationTracking();
+      }
+
       await updateDoc(doc(db, 'partners', profile.uid), {
         isOnline: newStatus,
         lastOnlineAt: new Date().toISOString()
