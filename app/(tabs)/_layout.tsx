@@ -44,7 +44,8 @@ export default function TabLayout() {
       <Tabs.Screen
         name="schedule"
         options={{
-          href: null, // Hide this tab from the nav bar, since schedule is in Tasks
+          title: 'Schedule',
+          tabBarIcon: ({ color, size }) => <Ionicons name="calendar" size={size} color={color} />,
         }}
       />
     </Tabs>

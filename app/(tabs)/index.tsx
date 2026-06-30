@@ -1110,10 +1110,7 @@ export default function PartnerHome() {
       <FlatList
         data={bookings.filter(b => {
           if (b.status === 'completed' || b.status === 'cancelled') return false;
-          const type = b.bookingType || 'instant';
-          if (activeTab === 'instant') return type === 'instant';
-          if (activeTab === 'assigned') return type === 'scheduled' || type === 'recurring';
-          return false;
+          return true; // We already filtered out non-instant from standardBookings, or we just show whatever is assigned
         })}
         keyExtractor={(item) => item.id}
         renderItem={renderTaskItem}
@@ -1142,26 +1139,11 @@ export default function PartnerHome() {
               </View>
             </View>
 
-            {/* Custom Tab Switcher */}
+            {/* Single Title instead of Tabs */}
             <View style={styles.tabSwitcher}>
-              <TouchableOpacity 
-                style={[styles.tabButton, activeTab === 'instant' && styles.tabButtonActive]}
-                onPress={() => {
-                  Haptics.selectionAsync();
-                  setActiveTab('instant');
-                }}
-              >
-                <Text style={[styles.tabText, activeTab === 'instant' && styles.tabTextActive]}>Instant Jobs</Text>
-              </TouchableOpacity>
-              <TouchableOpacity 
-                style={[styles.tabButton, activeTab === 'assigned' && styles.tabButtonActive]}
-                onPress={() => {
-                  Haptics.selectionAsync();
-                  setActiveTab('assigned');
-                }}
-              >
-                <Text style={[styles.tabText, activeTab === 'assigned' && styles.tabTextActive]}>Assigned Schedule</Text>
-              </TouchableOpacity>
+              <View style={[styles.tabButton, styles.tabButtonActive, { width: '100%' }]}>
+                <Text style={[styles.tabText, styles.tabTextActive]}>Active Instant Jobs</Text>
+              </View>
             </View>
           </>
         }
