@@ -295,7 +295,6 @@ export default function PartnerHome() {
 
     return () => {
       unsubAssigned();
-      unsubAvailable();
     };
   }, [profile?.uid]);
 
