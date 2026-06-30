@@ -301,6 +301,9 @@ export default function PartnerHome() {
     );
     const unsubTasks = onSnapshot(tasksQuery, (snapshot) => {
       let count = 0;
+      let locked = false;
+      const now = Date.now();
+      const thirtyMins = 30 * 60 * 1000;
       const todayStr = new Date().toDateString();
       snapshot.forEach(doc => {
         const data = doc.data();
@@ -308,10 +311,23 @@ export default function PartnerHome() {
           const taskDateStr = new Date(data.date).toDateString();
           if (taskDateStr === todayStr && data.status !== 'completed' && data.status !== 'cancelled') {
             count++;
+            const taskTime = new Date(data.date).getTime();
+            if (taskTime - now <= thirtyMins) {
+              locked = true;
+            }
           }
         }
       });
       setScheduleCount(count);
+      setIsScheduleLocked(locked);
+      
+      // Auto offline if locked
+      if (locked && profile?.isOnline) {
+        updateDoc(doc(db, 'partners', profile.uid), {
+          isOnline: false,
+          lastOnlineAt: new Date().toISOString()
+        });
+      }
     });
 
     return () => {
@@ -360,6 +376,9 @@ export default function PartnerHome() {
       });
 
       socket.on('newBookingRequest', async (data) => {
+        // Enforce rule: Finish scheduled tasks first!
+        if (scheduleLockedRef.current) return;
+        
         // Check if this partner is in the target list
         if (!data.targetPartnerIds || !data.targetPartnerIds.includes(profile.uid)) return;
 
@@ -791,6 +810,16 @@ export default function PartnerHome() {
 
   const toggleOnline = async () => {
     if (!profile?.uid) return;
+
+    // Check if partner is trying to go online but is locked due to pending tasks
+    if (!isOnline && scheduleLockedRef.current) {
+      Alert.alert(
+        "Action Blocked",
+        "Please complete your scheduled task first before getting new instant jobs."
+      );
+      return;
+    }
+
     setUpdatingOnline(true);
     const newStatus = !isOnline;
     try {
@@ -1121,7 +1150,7 @@ export default function PartnerHome() {
             <>
               <View style={[styles.compactOnlineDot, { backgroundColor: isOnline ? '#10b981' : '#94a3b8' }]} />
               <Text style={[styles.compactOnlineText, { color: isOnline ? '#137333' : '#64748b' }]}>
-                {isOnline ? 'Online' : 'Offline'}
+                {isOnline ? 'Get Jobs: ON' : 'Get Jobs: OFF'}
               </Text>
             </>
           )}
@@ -1129,7 +1158,7 @@ export default function PartnerHome() {
       </View>
 
       <FlatList
-        data={bookings.filter(b => {
+        data={isScheduleLocked ? [] : bookings.filter(b => {
           if (b.status === 'completed' || b.status === 'cancelled') return false;
           return true; // We already filtered out non-instant from standardBookings, or we just show whatever is assigned
         })}
@@ -1188,23 +1217,24 @@ export default function PartnerHome() {
           </>
         }
         ListEmptyComponent={
-          <View style={styles.emptyContainer}>
-            <Image 
-              source={{ uri: activeTab === 'instant' 
-                ? 'https://cdn-icons-png.flaticon.com/512/9484/9484089.png' 
-                : 'https://cdn-icons-png.flaticon.com/512/2693/2693507.png' 
-              }} 
-              style={styles.emptyImage}
-            />
-            <Text style={styles.emptyText}>
-              {activeTab === 'instant' ? 'No Live Tasks' : 'Schedule Clear'}
-            </Text>
-            <Text style={styles.emptySubText}>
-              {activeTab === 'instant' 
-                ? "You're online! We'll alert you when an instant job comes near you." 
-                : "You have no scheduled bookings assigned to you yet."}
-            </Text>
-          </View>
+          isScheduleLocked ? (
+            <View style={styles.emptyContainer}>
+              <Ionicons name="lock-closed" size={64} color="#ef4444" />
+              <Text style={{ fontSize: 18, fontWeight: '800', color: '#111827', marginTop: 16 }}>Schedule Locked</Text>
+              <Text style={{ textAlign: 'center', color: '#64748b', marginTop: 8, paddingHorizontal: 40 }}>
+                You have a task starting within 30 minutes. Please focus on your scheduled work.
+              </Text>
+            </View>
+          ) : (
+            <View style={styles.emptyContainer}>
+              <Image 
+                source={{ uri: 'https://cdn-icons-png.flaticon.com/512/9484/9484089.png' }} 
+                style={styles.emptyImage}
+              />
+              <Text style={styles.emptyText}>No Live Tasks</Text>
+              <Text style={styles.emptySubText}>We'll notify you when a new job is available nearby.</Text>
+            </View>
+          )
         }
       />
 
