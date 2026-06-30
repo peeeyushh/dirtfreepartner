@@ -608,6 +608,7 @@ export default function PartnerHome() {
     let confirmMsg = '';
 
     switch (currentStatus) {
+      case 'assigned':
       case 'accepted':
         nextStatus = 'on_the_way';
         confirmMsg = 'Start traveling to the customer location?';
@@ -1502,7 +1503,7 @@ export default function PartnerHome() {
                   }}
                 >
                   <Text style={styles.modernPrimaryActionText}>
-                    {selectedBooking.status === 'accepted' ? 'Start Journey' : 
+                    {selectedBooking.status === 'accepted' || selectedBooking.status === 'assigned' ? 'Start Journey' : 
                      selectedBooking.status === 'on_the_way' ? 'I Have Arrived' :
                      selectedBooking.status === 'arrived' ? 'Begin Work' :
                      selectedBooking.status === 'started' ? 'Finish Job' : 'Update Task'}
