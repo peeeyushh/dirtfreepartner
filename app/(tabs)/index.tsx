@@ -145,6 +145,17 @@ export default function PartnerHome() {
   });
   
   const [scheduleCount, setScheduleCount] = useState(0);
+  const [isScheduleLocked, setIsScheduleLocked] = useState(false);
+  const scheduleCountRef = useRef(0);
+  const scheduleLockedRef = useRef(false);
+  
+  useEffect(() => {
+    scheduleCountRef.current = scheduleCount;
+  }, [scheduleCount]);
+
+  useEffect(() => {
+    scheduleLockedRef.current = isScheduleLocked;
+  }, [isScheduleLocked]);
   
   // Uber-style incoming booking states
   const [isOnline, setIsOnline] = useState(profile?.isOnline || false);
