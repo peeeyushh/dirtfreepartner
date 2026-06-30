@@ -1172,7 +1172,7 @@ export default function PartnerHome() {
                     {scheduleCount} Scheduled {scheduleCount === 1 ? 'Task' : 'Tasks'}
                   </Text>
                   <Text style={{ color: '#e0e7ff', fontSize: 13 }}>
-                    You have recurring jobs for today. Tap to view.
+                    You have some jobs for today. Tap to view.
                   </Text>
                 </View>
                 <Ionicons name="arrow-forward" size={20} color="#fff" />
@@ -2158,7 +2158,23 @@ const styles = StyleSheet.create({
     elevation: 6
   },
 
-  emptyContainer: { alignItems: 'center', justifyContent: 'center', marginTop: 80, paddingHorizontal: 40 },
+  emptyContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 40,
+    marginTop: 40,
+  },
+  emptyIconCircle: { 
+    width: 80, 
+    height: 80, 
+    borderRadius: 40, 
+    backgroundColor: '#fff', 
+    justifyContent: 'center', 
+    alignItems: 'center', 
+    marginBottom: 15, 
+    borderWidth: 1, 
+    borderColor: '#f1f5f9' 
+  },
   emptyImage: { width: 140, height: 140, marginBottom: 24, opacity: 0.8 },
   emptyText: { fontSize: 22, fontWeight: '900', color: '#111827', marginBottom: 8, letterSpacing: -0.5 },
   emptySubText: { fontSize: 14, color: '#64748b', textAlign: 'center', lineHeight: 22, fontWeight: '600' },
