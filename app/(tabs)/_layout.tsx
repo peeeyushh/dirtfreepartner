@@ -4,7 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Platform } from 'react-native';
 import { useAuth } from '../../context/AuthContext';
 import { db } from '../../lib/firebase';
-import { collection, query, where, onSnapshot } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, doc, getDoc } from 'firebase/firestore';
 
 export default function TabLayout() {
   const { profile } = useAuth();
@@ -19,19 +19,31 @@ export default function TabLayout() {
     );
 
     const unsubscribe = onSnapshot(tasksQuery, (snapshot) => {
-      let count = 0;
-      const todayStr = new Date().toDateString();
-      
-      snapshot.forEach(doc => {
-        const data = doc.data();
-        if (data.date) {
-          const taskDateStr = new Date(data.date).toDateString();
-          if (taskDateStr === todayStr && data.status !== 'completed' && data.status !== 'cancelled') {
-            count++;
+      const checkTasks = async () => {
+        let count = 0;
+        const todayStr = new Date().toDateString();
+        
+        for (const docSnap of snapshot.docs) {
+          const data = docSnap.data();
+          if (data.date) {
+            const taskDateStr = new Date(data.date).toDateString();
+            if (taskDateStr === todayStr && data.status !== 'completed' && data.status !== 'cancelled') {
+              if (data.bookingId) {
+                const bDoc = await getDoc(doc(db, 'bookings', data.bookingId));
+                if (bDoc.exists()) {
+                  count++;
+                }
+              } else {
+                // If it doesn't have a bookingId, it's valid standalone
+                count++;
+              }
+            }
           }
         }
-      });
-      setUndoneCount(count);
+        setUndoneCount(count);
+      };
+      
+      checkTasks();
     });
 
     return () => unsubscribe();

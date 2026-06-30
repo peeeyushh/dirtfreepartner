@@ -311,34 +311,52 @@ export default function PartnerHome() {
       where('assignedPartnerId', '==', profile.uid)
     );
     const unsubTasks = onSnapshot(tasksQuery, (snapshot) => {
-      let count = 0;
-      let locked = false;
-      const now = Date.now();
-      const thirtyMins = 30 * 60 * 1000;
-      const todayStr = new Date().toDateString();
-      snapshot.forEach(doc => {
-        const data = doc.data();
-        if (data.date) {
-          const taskDateStr = new Date(data.date).toDateString();
-          if (taskDateStr === todayStr && data.status !== 'completed' && data.status !== 'cancelled') {
-            count++;
-            const taskTime = new Date(data.date).getTime();
-            if (taskTime - now <= thirtyMins) {
-              locked = true;
+      const checkTasks = async () => {
+        let count = 0;
+        let locked = false;
+        const now = Date.now();
+        const thirtyMins = 30 * 60 * 1000;
+        const todayStr = new Date().toDateString();
+        
+        for (const docSnap of snapshot.docs) {
+          const data = docSnap.data();
+          if (data.date) {
+            const taskDateStr = new Date(data.date).toDateString();
+            if (taskDateStr === todayStr && data.status !== 'completed' && data.status !== 'cancelled') {
+              let isValid = false;
+              if (data.bookingId) {
+                const bDoc = await getDoc(doc(db, 'bookings', data.bookingId));
+                if (bDoc.exists()) {
+                  isValid = true;
+                }
+              } else {
+                isValid = true; // no parent bookingId means it's a valid standalone task
+              }
+              
+              if (isValid) {
+                count++;
+                const taskTime = new Date(data.date).getTime();
+                if (taskTime - now <= thirtyMins) {
+                  locked = true;
+                }
+              }
             }
           }
         }
-      });
-      setScheduleCount(count);
-      setIsScheduleLocked(locked);
+        
+        setScheduleCount(count);
+        setIsScheduleLocked(locked);
+        
+        // Auto offline if locked
+        if (locked && profile?.isOnline) {
+          updateDoc(doc(db, 'partners', profile.uid), {
+            isOnline: false,
+            lastOnlineAt: new Date().toISOString()
+          });
+        }
+      };
       
-      // Auto offline if locked
-      if (locked && profile?.isOnline) {
-        updateDoc(doc(db, 'partners', profile.uid), {
-          isOnline: false,
-          lastOnlineAt: new Date().toISOString()
-        });
-      }
+      checkTasks();
     });
 
     return () => {
