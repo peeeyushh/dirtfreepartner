@@ -132,7 +132,6 @@ export default function PartnerHome() {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<'instant' | 'assigned'>('instant');
   const [standardBookings, setStandardBookings] = useState<Booking[]>([]);
-  const [taskBookings, setTaskBookings] = useState<Booking[]>([]);
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [availableBookings, setAvailableBookings] = useState<Booking[]>([]);
   const [partnerCoords, setPartnerCoords] = useState<{ latitude: number; longitude: number } | null>(null);
@@ -294,57 +293,14 @@ export default function PartnerHome() {
       setLoading(false);
     });
 
-    const tasksQuery = query(
-      collection(db, 'serviceTasks'),
-      where('assignedPartnerId', '==', profile.uid)
-    );
-
-    const unsubTasks = onSnapshot(tasksQuery, async (snapshot) => {
-      const todayStr = new Date().toDateString();
-      const fetchedTasks: any[] = [];
-      
-      for (const docSnap of snapshot.docs) {
-        const data = docSnap.data();
-        if (!data.date) continue;
-        const taskDateStr = new Date(data.date).toDateString();
-        
-        if (taskDateStr === todayStr && data.status !== 'cancelled') {
-          // fetch parent booking data
-          if (data.bookingId) {
-            const bDoc = await getDoc(doc(db, 'bookings', data.bookingId));
-            if (bDoc.exists()) {
-              const bData = bDoc.data();
-              fetchedTasks.push({
-                ...bData,
-                id: docSnap.id,
-                isTask: true,
-                taskId: docSnap.id,
-                bookingId: data.bookingId,
-                status: data.status,
-                date: data.date,
-                serviceName: bData.service || 'Recurring Service'
-              });
-            }
-          }
-        }
-      }
-      setTaskBookings(fetchedTasks);
-    });
-
-    const unsubAvailable = onSnapshot(availableQuery, (snapshot) => {
-      const fetched = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id })) as Booking[];
-      setAvailableBookings(fetched);
-    });
-
     return () => {
       unsubAssigned();
-      unsubTasks();
       unsubAvailable();
     };
   }, [profile?.uid]);
 
   useEffect(() => {
-    const combined = [...standardBookings, ...taskBookings];
+    const combined = [...standardBookings];
     combined.sort((a: any, b: any) => {
       const dateA = a.createdAt?.seconds || 0;
       const dateB = b.createdAt?.seconds || 0;
@@ -354,7 +310,7 @@ export default function PartnerHome() {
 
     const completed = combined.filter(b => b.status === 'completed');
     setStats(prev => ({ ...prev, totalTasks: completed.length }));
-  }, [standardBookings, taskBookings]);
+  }, [standardBookings]);
 
   // Socket & Location Initialization
   useEffect(() => {
@@ -656,34 +612,16 @@ export default function PartnerHome() {
           onPress: async () => {
             try {
               const booking = bookings.find(b => b.id === bookingId);
-              if (booking && booking.isTask) {
-                const docId = booking.taskId || booking.id;
-                try {
-                  await updateDoc(doc(db, 'serviceTasks', docId), {
-                    status: nextStatus,
-                    [`${nextStatus}At`]: new Date().toISOString()
-                  });
-                } catch (err: any) {
-                  if (err.code === 'not-found') {
-                    // Fallback for older data structures
-                    await updateDoc(doc(db, 'bookings', docId), {
-                      status: nextStatus,
-                      [`${nextStatus}At`]: new Date().toISOString()
-                    });
-                  } else throw err;
-                }
-              } else {
-                await updateDoc(doc(db, 'bookings', bookingId), {
-                  status: nextStatus,
-                  [`${nextStatus}At`]: new Date().toISOString(),
-                  ...(nextStatus === 'accepted' ? {
-                    workerId: profile?.uid,
-                    workerName: profile?.firstName + ' ' + (profile?.lastName || ''),
-                    workerPhone: profile?.phone || '',
-                    workerImage: profile?.image || ''
-                  } : {})
-                });
-              }
+              await updateDoc(doc(db, 'bookings', bookingId), {
+                status: nextStatus,
+                [`${nextStatus}At`]: new Date().toISOString(),
+                ...(nextStatus === 'accepted' ? {
+                  workerId: profile?.uid,
+                  workerName: profile?.firstName + ' ' + (profile?.lastName || ''),
+                  workerPhone: profile?.phone || '',
+                  workerImage: profile?.image || ''
+                } : {})
+              });
               
               // Notify customer
               if (booking?.userId) {
@@ -733,18 +671,7 @@ export default function PartnerHome() {
         };
 
         try {
-          if (currentPhotoBooking.isTask) {
-            const docId = currentPhotoBooking.taskId || currentPhotoBooking.id;
-            try {
-              await updateDoc(doc(db, 'serviceTasks', docId), updateData);
-            } catch (err: any) {
-              if (err.code === 'not-found') {
-                await updateDoc(doc(db, 'bookings', docId), updateData);
-              } else throw err;
-            }
-          } else {
-            await updateDoc(doc(db, 'bookings', currentPhotoBooking.id), updateData);
-          }
+          await updateDoc(doc(db, 'bookings', currentPhotoBooking.id), updateData);
         } catch (updateError) {
           console.error("Firestore update failed:", updateError);
           throw updateError;
