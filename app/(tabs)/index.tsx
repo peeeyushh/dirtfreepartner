@@ -144,6 +144,8 @@ export default function PartnerHome() {
     rating: profile?.averageRating ? Number(profile.averageRating).toFixed(1) : "0.0"
   });
   
+  const [scheduleCount, setScheduleCount] = useState(0);
+  
   // Uber-style incoming booking states
   const [isOnline, setIsOnline] = useState(profile?.isOnline || false);
   
@@ -293,8 +295,28 @@ export default function PartnerHome() {
       setLoading(false);
     });
 
+    const tasksQuery = query(
+      collection(db, 'serviceTasks'),
+      where('assignedPartnerId', '==', profile.uid)
+    );
+    const unsubTasks = onSnapshot(tasksQuery, (snapshot) => {
+      let count = 0;
+      const todayStr = new Date().toDateString();
+      snapshot.forEach(doc => {
+        const data = doc.data();
+        if (data.date) {
+          const taskDateStr = new Date(data.date).toDateString();
+          if (taskDateStr === todayStr && data.status !== 'completed' && data.status !== 'cancelled') {
+            count++;
+          }
+        }
+      });
+      setScheduleCount(count);
+    });
+
     return () => {
       unsubAssigned();
+      unsubTasks();
     };
   }, [profile?.uid]);
 
@@ -1137,6 +1159,25 @@ export default function PartnerHome() {
                 </View>
               </View>
             </View>
+
+            {/* Schedule Banner */}
+            {scheduleCount > 0 && (
+              <TouchableOpacity 
+                style={[styles.miniStatCard, { backgroundColor: '#4F46E5', marginBottom: 16, width: '100%' }]}
+                onPress={() => router.push('/schedule')}
+              >
+                <Ionicons name="calendar" size={24} color="#fff" />
+                <View style={{ flex: 1, marginLeft: 12 }}>
+                  <Text style={{ color: '#fff', fontSize: 16, fontWeight: '800' }}>
+                    {scheduleCount} Scheduled {scheduleCount === 1 ? 'Task' : 'Tasks'}
+                  </Text>
+                  <Text style={{ color: '#e0e7ff', fontSize: 13 }}>
+                    You have recurring jobs for today. Tap to view.
+                  </Text>
+                </View>
+                <Ionicons name="arrow-forward" size={20} color="#fff" />
+              </TouchableOpacity>
+            )}
 
             {/* Single Title instead of Tabs */}
             <View style={styles.tabSwitcher}>
