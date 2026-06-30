@@ -123,12 +123,16 @@ interface Booking {
   name?: string;
   price?: number;
   messageText?: string;
+  isTask?: boolean;
+  taskId?: string;
 }
 
 export default function PartnerHome() {
   const { profile, signOut } = useAuth();
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<'instant' | 'assigned'>('instant');
+  const [standardBookings, setStandardBookings] = useState<Booking[]>([]);
+  const [taskBookings, setTaskBookings] = useState<Booking[]>([]);
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [availableBookings, setAvailableBookings] = useState<Booking[]>([]);
   const [partnerCoords, setPartnerCoords] = useState<{ latitude: number; longitude: number } | null>(null);
@@ -283,26 +287,74 @@ export default function PartnerHome() {
 
     const unsubAssigned = onSnapshot(assignedQuery, (snapshot) => {
       const fetched = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Booking[];
-      fetched.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
-      setBookings(fetched);
-
-      const completed = fetched.filter(b => b.status === 'completed');
-      setStats(prev => ({ ...prev, totalTasks: completed.length }));
+      // Filter out parent recurring bookings since we handle them via serviceTasks
+      const standard = fetched.filter(b => b.bookingType !== 'recurring');
+      standard.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
+      setStandardBookings(standard);
       setLoading(false);
+    });
+
+    const tasksQuery = query(
+      collection(db, 'serviceTasks'),
+      where('assignedPartnerId', '==', profile.uid)
+    );
+
+    const unsubTasks = onSnapshot(tasksQuery, async (snapshot) => {
+      const todayStr = new Date().toDateString();
+      const fetchedTasks: any[] = [];
+      
+      for (const docSnap of snapshot.docs) {
+        const data = docSnap.data();
+        if (!data.date) continue;
+        const taskDateStr = new Date(data.date).toDateString();
+        
+        if (taskDateStr === todayStr && data.status !== 'cancelled') {
+          // fetch parent booking data
+          if (data.bookingId) {
+            const bDoc = await getDoc(doc(db, 'bookings', data.bookingId));
+            if (bDoc.exists()) {
+              const bData = bDoc.data();
+              fetchedTasks.push({
+                ...bData,
+                id: docSnap.id,
+                isTask: true,
+                taskId: docSnap.id,
+                bookingId: data.bookingId,
+                status: data.status,
+                date: data.date,
+                serviceName: bData.service || 'Recurring Service'
+              });
+            }
+          }
+        }
+      }
+      setTaskBookings(fetchedTasks);
     });
 
     const unsubAvailable = onSnapshot(availableQuery, (snapshot) => {
       const fetched = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Booking[];
-      // Optional: Filter by city here if profile.city exists
-      // const nearby = profile.city ? fetched.filter(b => b.city === profile.city) : fetched;
       setAvailableBookings(fetched);
     });
 
     return () => {
       unsubAssigned();
+      unsubTasks();
       unsubAvailable();
     };
   }, [profile?.uid]);
+
+  useEffect(() => {
+    const combined = [...standardBookings, ...taskBookings];
+    combined.sort((a: any, b: any) => {
+      const dateA = a.createdAt?.seconds || 0;
+      const dateB = b.createdAt?.seconds || 0;
+      return dateB - dateA;
+    });
+    setBookings(combined);
+
+    const completed = combined.filter(b => b.status === 'completed');
+    setStats(prev => ({ ...prev, totalTasks: completed.length }));
+  }, [standardBookings, taskBookings]);
 
   // Socket & Location Initialization
   useEffect(() => {
@@ -602,13 +654,20 @@ export default function PartnerHome() {
           text: 'Confirm', 
           onPress: async () => {
             try {
-              await updateDoc(doc(db, 'bookings', bookingId), {
-                status: nextStatus,
-                [`${nextStatus}At`]: new Date().toISOString()
-              });
+              const booking = bookings.find(b => b.id === bookingId);
+              if (booking && booking.isTask) {
+                await updateDoc(doc(db, 'serviceTasks', booking.taskId), {
+                  status: nextStatus,
+                  [`${nextStatus}At`]: new Date().toISOString()
+                });
+              } else {
+                await updateDoc(doc(db, 'bookings', bookingId), {
+                  status: nextStatus,
+                  [`${nextStatus}At`]: new Date().toISOString()
+                });
+              }
               
               // Notify customer
-              const booking = bookings.find(b => b.id === bookingId);
               if (booking?.userId) {
                 let title = '';
                 let body = '';
@@ -655,7 +714,11 @@ export default function PartnerHome() {
           [`${photoType}Image`]: imageUrl
         };
 
-        await updateDoc(doc(db, 'bookings', currentPhotoBooking.id), updateData);
+        if (currentPhotoBooking.isTask) {
+          await updateDoc(doc(db, 'serviceTasks', currentPhotoBooking.taskId), updateData);
+        } else {
+          await updateDoc(doc(db, 'bookings', currentPhotoBooking.id), updateData);
+        }
         
         // Notify customer
         if (currentPhotoBooking.userId) {
