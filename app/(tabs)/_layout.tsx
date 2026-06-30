@@ -1,9 +1,42 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Platform } from 'react-native';
+import { useAuth } from '../../context/AuthContext';
+import { db } from '../../lib/firebase';
+import { collection, query, where, onSnapshot } from 'firebase/firestore';
 
 export default function TabLayout() {
+  const { profile } = useAuth();
+  const [undoneCount, setUndoneCount] = useState(0);
+
+  useEffect(() => {
+    if (!profile?.uid) return;
+
+    const tasksQuery = query(
+      collection(db, 'serviceTasks'),
+      where('assignedPartnerId', '==', profile.uid)
+    );
+
+    const unsubscribe = onSnapshot(tasksQuery, (snapshot) => {
+      let count = 0;
+      const todayStr = new Date().toDateString();
+      
+      snapshot.forEach(doc => {
+        const data = doc.data();
+        if (data.date) {
+          const taskDateStr = new Date(data.date).toDateString();
+          if (taskDateStr === todayStr && data.status !== 'completed' && data.status !== 'cancelled') {
+            count++;
+          }
+        }
+      });
+      setUndoneCount(count);
+    });
+
+    return () => unsubscribe();
+  }, [profile?.uid]);
+
   return (
     <Tabs screenOptions={{
       headerShown: false,
@@ -46,6 +79,8 @@ export default function TabLayout() {
         options={{
           title: 'Schedule',
           tabBarIcon: ({ color, size }) => <Ionicons name="calendar" size={size} color={color} />,
+          tabBarBadge: undoneCount > 0 ? undoneCount : undefined,
+          tabBarBadgeStyle: { backgroundColor: '#ef4444' }
         }}
       />
     </Tabs>
