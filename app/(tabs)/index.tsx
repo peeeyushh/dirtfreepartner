@@ -286,7 +286,7 @@ export default function PartnerHome() {
     );
 
     const unsubAssigned = onSnapshot(assignedQuery, (snapshot) => {
-      const fetched = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Booking[];
+      const fetched = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id })) as Booking[];
       // Filter out parent recurring bookings since we handle them via serviceTasks
       const standard = fetched.filter(b => b.bookingType !== 'recurring');
       standard.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
@@ -332,7 +332,7 @@ export default function PartnerHome() {
     });
 
     const unsubAvailable = onSnapshot(availableQuery, (snapshot) => {
-      const fetched = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Booking[];
+      const fetched = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id })) as Booking[];
       setAvailableBookings(fetched);
     });
 
