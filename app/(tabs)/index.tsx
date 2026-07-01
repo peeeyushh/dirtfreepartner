@@ -308,6 +308,11 @@ export default function PartnerHome() {
       setLoading(false);
     });
 
+    const unsubAvailable = onSnapshot(availableQuery, (snapshot) => {
+      const fetched = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id })) as Booking[];
+      setAvailableBookings(fetched);
+    });
+
     const tasksQuery = query(
       collection(db, 'serviceTasks'),
       where('assignedPartnerId', '==', profile.uid)
@@ -363,6 +368,7 @@ export default function PartnerHome() {
 
     return () => {
       unsubAssigned();
+      unsubAvailable();
       unsubTasks();
     };
   }, [profile?.uid]);
